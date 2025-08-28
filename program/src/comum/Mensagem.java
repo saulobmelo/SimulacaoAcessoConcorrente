@@ -13,9 +13,17 @@ public class Mensagem implements Serializable {
         this.relogio = relogio;
     }
 
-    public String getTipo() { return tipo; }
-    public String getConteudo() { return conteudo; }
-    public int getRelogio() { return relogio; }
+    public String getTipo() {
+        return tipo;
+    }
+
+    public String getConteudo() {
+        return conteudo;
+    }
+
+    public int getRelogio() {
+        return relogio;
+    }
 
     @Override
     public String toString() {

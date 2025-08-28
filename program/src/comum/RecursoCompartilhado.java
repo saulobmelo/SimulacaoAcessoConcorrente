@@ -18,6 +18,7 @@ public class RecursoCompartilhado implements Serializable {
     public synchronized void salvarCheckpoint(String arquivo) throws IOException {
         try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(arquivo))) {
             out.writeObject(contador.get());
+            System.out.println("[Checkpoint] Salvo valor: " + contador.get() + " em " + arquivo);
         }
     }
 
@@ -26,6 +27,7 @@ public class RecursoCompartilhado implements Serializable {
         try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(arquivo))) {
             int valor = (Integer) in.readObject();
             contador.set(valor);
+            System.out.println("[Rollback] Restaurado valor: " + valor + " de " + arquivo);
         }
     }
 }
