@@ -1,5 +1,3 @@
-# 📄 README.md
-
 ## Sistema Distribuído de Controle Colaborativo com Exclusão Mútua e Recuperação de Falhas
 
 Este projeto é uma **simulação de acesso concorrente a um recurso crítico compartilhado** em um ambiente distribuído.  
