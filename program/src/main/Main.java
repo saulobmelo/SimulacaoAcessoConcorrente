@@ -12,14 +12,12 @@ public class Main {
         System.out.println("Disciplina: Sistemas Distribuídos");
         System.out.println("Objetivo: Simular acesso concorrente a recurso crítico\n");
 
-        if (args.length == 0 || args[0].equals("todos")) {
+        if (args.length == 0) {
             executarSistemaCompleto();
         } else if (args[0].equals("servidor")) {
             executarApenasServidor();
         } else if (args[0].equals("cliente") && args.length >= 2) {
             executarApenasCliente(args[1]);
-        } else if (args[0].equals("teste")) {
-            executarTestes();
         } else {
             mostrarAjuda();
         }
@@ -42,10 +40,10 @@ public class Main {
 
         // Aguardar servidor iniciar
         try {
-            Thread.sleep(3000);
+            Thread.sleep(2000);
             System.out.println("[MAIN] Servidor iniciado. Iniciando clientes...");
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
 
         // Executar 4 clientes
@@ -62,11 +60,10 @@ public class Main {
                 }
             });
 
-            // Pequeno delay entre início dos clientes
             try {
-                Thread.sleep(1000);
+                Thread.sleep(800); // Delay menor entre clientes
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                Thread.currentThread().interrupt();
             }
         }
 
@@ -75,9 +72,8 @@ public class Main {
             System.out.println("\n[MAIN] Sistema em execução. Pressione Ctrl+C para finalizar.");
             clienteExecutor.shutdown();
             clienteExecutor.awaitTermination(1, TimeUnit.HOURS);
-            System.out.println("[MAIN] Sistema finalizado.");
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -99,31 +95,14 @@ public class Main {
         }
     }
 
-    private static void executarTestes() {
-        System.out.println("🧪 Executando testes...");
-        // Implementar testes automatizados aqui
-        System.out.println("Testes concluídos!");
-    }
-
     private static void mostrarAjuda() {
         System.out.println("📋 Uso do Sistema:");
         System.out.println("  java Main                    - Executa servidor + 4 clientes");
-        System.out.println("  java Main todos              - Executa servidor + 4 clientes");
         System.out.println("  java Main servidor           - Executa apenas o servidor");
         System.out.println("  java Main cliente <nome>     - Executa apenas um cliente");
-        System.out.println("  java Main teste              - Executa testes automatizados");
         System.out.println();
         System.out.println("📚 Exemplos:");
         System.out.println("  java Main servidor");
-        System.out.println("  java Main cliente Worker1");
-        System.out.println("  java Main todos");
-        System.out.println();
-        System.out.println("🎯 Funcionalidades implementadas:");
-        System.out.println("  ✅ Exclusão mútua distribuída");
-        System.out.println("  ✅ Acesso concorrente a recurso compartilhado");
-        System.out.println("  ✅ Checkpoints e recuperação de falhas");
-        System.out.println("  ✅ Relógios lógicos");
-        System.out.println("  ✅ Persistência de estado do servidor");
-        System.out.println("  ✅ Tolerância a falhas básica");
+        System.out.println("  java Main cliente Cliente1");
     }
 }

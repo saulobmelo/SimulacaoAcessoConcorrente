@@ -10,10 +10,8 @@ public class NoCliente {
     private static String HOST = "localhost";
     private static int PORTA = 5000;
     private static String nomeDoNo = "Cliente";
-
     private static int relogio = 0;
     private static RecursoCompartilhado recurso = new RecursoCompartilhado();
-    private static int tentativasConexao = 0;
 
     public static void main(String[] args) throws Exception {
         if (args.length >= 1) HOST = args[0];
@@ -22,98 +20,84 @@ public class NoCliente {
 
         System.out.println("[" + nomeDoNo + "] Iniciando cliente...");
 
-        // Tentar restaurar checkpoint se existir
-        try {
-            File checkpoint = new File("checkpoint_" + nomeDoNo + ".dat");
-            if (checkpoint.exists()) {
-                recurso.restaurarCheckpoint("checkpoint_" + nomeDoNo + ".dat");
-                System.out.println("[" + nomeDoNo + "] Checkpoint restaurado");
-            }
-        } catch (Exception e) {
-            System.out.println("[" + nomeDoNo + "] Erro ao restaurar checkpoint: " + e.getMessage());
-        }
+        // Limpar checkpoint anterior para demonstração
+        File checkpoint = new File("checkpoint_" + nomeDoNo + ".dat");
+        if (checkpoint.exists()) checkpoint.delete();
 
         Random random = new Random();
+
         while (true) {
             try {
-                int delay = 2000 + random.nextInt(3000);
-                System.out.println("[" + nomeDoNo + "] Próxima requisição em " + delay + "ms");
+                int delay = 3000 + random.nextInt(2000);
+                System.out.println("[" + nomeDoNo + "] Aguardando " + delay + "ms antes da próxima requisição");
                 Thread.sleep(delay);
 
                 requisitarAcesso();
-                tentativasConexao = 0; // Resetar tentativas após sucesso
 
             } catch (Exception e) {
                 System.out.println("[" + nomeDoNo + "] Erro: " + e.getMessage());
-                tentativasConexao++;
-
-                if (tentativasConexao > 3) {
-                    System.out.println("[" + nomeDoNo + "] Muitas falhas. Verifique se o servidor está rodando.");
-                }
-
-                Thread.sleep(5000); // Espera antes de tentar novamente
+                Thread.sleep(5000);
             }
         }
     }
 
     private static void requisitarAcesso() throws Exception {
         relogio++;
-        System.out.println("[" + nomeDoNo + "] Solicitando acesso... Relógio=" + relogio);
+        System.out.println("[" + nomeDoNo + "] ⏰ Solicitando acesso... Relógio=" + relogio);
 
         try (Socket socket = new Socket(HOST, PORTA);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
 
-            // Timeout para evitar bloqueio infinito
-            socket.setSoTimeout(10000);
+            socket.setSoTimeout(30000); // Timeout de 30 segundos
 
+            // Enviar requisição
             out.writeObject(new Mensagem("REQUISICAO", nomeDoNo + " quer acessar o recurso", relogio));
-            Mensagem resposta = (Mensagem) in.readObject();
 
-            System.out.println("[" + nomeDoNo + "] Resposta do servidor: " + resposta.getTipo());
+            // Aguardar resposta
+            Mensagem resposta = (Mensagem) in.readObject();
+            System.out.println("[" + nomeDoNo + "] 📨 Resposta: " + resposta.getConteudo());
 
             if (resposta.getTipo().equals("PERMISSAO")) {
                 acessarRecursoCritico();
-                liberarAcesso();
+                liberarAcesso(out);
             } else if (resposta.getTipo().equals("AGUARDE")) {
-                System.out.println("[" + nomeDoNo + "] " + resposta.getConteudo());
+                // Manter conexão aberta aguardando permissão
+                System.out.println("[" + nomeDoNo + "] 🕒 " + resposta.getConteudo());
+
+                // Aguardar pela permissão
+                Mensagem permissao = (Mensagem) in.readObject();
+                if (permissao.getTipo().equals("PERMISSAO")) {
+                    acessarRecursoCritico();
+                    liberarAcesso(out);
+                }
             }
         }
     }
 
     private static void acessarRecursoCritico() throws Exception {
         relogio++;
-        System.out.println("[" + nomeDoNo + "] === ACESSANDO RECURSO CRÍTICO ===");
-        System.out.println("[" + nomeDoNo + "] Relógio=" + relogio);
+        System.out.println("[" + nomeDoNo + "] 🔐 === ACESSANDO RECURSO CRÍTICO ===");
+        System.out.println("[" + nomeDoNo + "] ⏰ Relógio=" + relogio);
 
         recurso.incrementar();
-        System.out.println("[" + nomeDoNo + "] Valor atual do contador = " + recurso.getValor());
+        int valorAtual = recurso.getValor();
+        System.out.println("[" + nomeDoNo + "] 📊 Valor atual do contador = " + valorAtual);
 
-        // Simular trabalho no recurso
-        Thread.sleep(1000 + new Random().nextInt(2000));
+        // Simular trabalho no recurso (1-3 segundos)
+        int tempoTrabalho = 1000 + new Random().nextInt(2000);
+        System.out.println("[" + nomeDoNo + "] ⏳ Trabalhando no recurso por " + tempoTrabalho + "ms");
+        Thread.sleep(tempoTrabalho);
 
         // Salvar checkpoint
         recurso.salvarCheckpoint("checkpoint_" + nomeDoNo + ".dat");
 
-        System.out.println("[" + nomeDoNo + "] === RECURSO LIBERADO ===");
+        System.out.println("[" + nomeDoNo + "] ✅ === RECURSO LIBERADO ===");
     }
 
-    private static void liberarAcesso() throws Exception {
+    private static void liberarAcesso(ObjectOutputStream out) throws Exception {
         relogio++;
-        System.out.println("[" + nomeDoNo + "] Liberando acesso... Relógio=" + relogio);
-
-        try (Socket socket = new Socket(HOST, PORTA);
-             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-            out.writeObject(new Mensagem("LIBERACAO", nomeDoNo + " liberou o recurso", relogio));
-        }
-    }
-
-    private static void enviarHeartbeat() {
-        try (Socket socket = new Socket(HOST, PORTA);
-             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream())) {
-            out.writeObject(new Mensagem("HEARTBEAT", nomeDoNo + " heartbeat", relogio));
-        } catch (Exception e) {
-            System.out.println("[" + nomeDoNo + "] Servidor não responde ao heartbeat");
-        }
+        System.out.println("[" + nomeDoNo + "] 🚀 Liberando acesso... Relógio=" + relogio);
+        out.writeObject(new Mensagem("LIBERACAO", nomeDoNo + " liberou o recurso", relogio));
     }
 }

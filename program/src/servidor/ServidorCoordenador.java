@@ -8,33 +8,21 @@ import java.util.*;
 
 public class ServidorCoordenador {
     private static final int PORTA = 5000;
-    private static Queue<String> filaRequisicoes = new LinkedList<>();
-    private static Map<String, Socket> clientesConectados = new HashMap<>();
+    private static Queue<ClientHandler> filaRequisicoes = new LinkedList<>();
     private static RecursoCompartilhado recurso = new RecursoCompartilhado();
     private static boolean executando = true;
 
     public static void main(String[] args) throws IOException {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            executando = false;
-            System.out.println("[Servidor] Encerrando servidor...");
-            salvarEstadoServidor();
-        }));
-
-        // Tentar restaurar estado anterior
-        try {
-            restaurarEstadoServidor();
-            System.out.println("[Servidor] Estado anterior restaurado. Fila: " + filaRequisicoes.size() + " clientes");
-        } catch (Exception e) {
-            System.out.println("[Servidor] Iniciando com estado novo");
-        }
+        limparEstadoAnterior();
 
         ServerSocket servidor = new ServerSocket(PORTA);
         System.out.println("[Servidor] Coordenador iniciado na porta " + PORTA);
+        System.out.println("[Servidor] Estado inicial: fila vazia");
 
         while (executando) {
             try {
                 Socket cliente = servidor.accept();
-                new Thread(() -> tratarCliente(cliente)).start();
+                new Thread(new ClientHandler(cliente)).start();
             } catch (SocketException e) {
                 if (executando) {
                     System.out.println("[Servidor] Socket fechado: " + e.getMessage());
@@ -44,86 +32,93 @@ public class ServidorCoordenador {
         servidor.close();
     }
 
-    private static void tratarCliente(Socket cliente) {
-        String clienteId = cliente.getInetAddress().toString() + ":" + cliente.getPort();
+    private static void limparEstadoAnterior() {
+        File stateFile = new File("servidor_state.dat");
+        if (stateFile.exists()) {
+            stateFile.delete();
+            System.out.println("[Servidor] Estado anterior removido");
+        }
+    }
 
-        try (ObjectInputStream in = new ObjectInputStream(cliente.getInputStream());
-             ObjectOutputStream out = new ObjectOutputStream(cliente.getOutputStream())) {
+    // Classe interna para lidar com cada cliente
+    static class ClientHandler implements Runnable {
+        private Socket socket;
+        private ObjectOutputStream out;
+        private ObjectInputStream in;
+        private String clientId;
 
-            Mensagem msg = (Mensagem) in.readObject();
-            System.out.println("[Servidor] Recebido de " + clienteId + ": " + msg);
+        public ClientHandler(Socket socket) {
+            this.socket = socket;
+            this.clientId = socket.getInetAddress() + ":" + socket.getPort();
+        }
 
-            switch (msg.getTipo()) {
-                case "REQUISICAO":
-                    filaRequisicoes.add(clienteId);
-                    clientesConectados.put(clienteId, cliente);
-
-                    if (filaRequisicoes.peek().equals(clienteId)) {
-                        out.writeObject(new Mensagem("PERMISSAO", "Acesso concedido", msg.getRelogio()));
-                        System.out.println("[Servidor] Permissão concedida para: " + clienteId);
-                    } else {
-                        out.writeObject(new Mensagem("AGUARDE", "Você está na posição " + filaRequisicoes.size(), msg.getRelogio()));
-                    }
-                    break;
-
-                case "LIBERACAO":
-                    filaRequisicoes.poll();
-                    System.out.println("[Servidor] Cliente liberou recurso: " + clienteId);
-
-                    if (!filaRequisicoes.isEmpty()) {
-                        String proximoId = filaRequisicoes.peek();
-                        Socket proximo = clientesConectados.get(proximoId);
-                        if (proximo != null && !proximo.isClosed()) {
-                            ObjectOutputStream outProx = new ObjectOutputStream(proximo.getOutputStream());
-                            outProx.writeObject(new Mensagem("PERMISSAO", "Acesso concedido", msg.getRelogio()));
-                            System.out.println("[Servidor] Permissão concedida para próximo: " + proximoId);
-                        }
-                    }
-                    break;
-
-                case "HEARTBEAT":
-                    out.writeObject(new Mensagem("HEARTBEAT_ACK", "Recebido", msg.getRelogio()));
-                    break;
-            }
-
-            // Salvar estado periodicamente
-            salvarEstadoServidor();
-
-        } catch (Exception e) {
-            System.out.println("[Servidor] Erro com cliente " + clienteId + ": " + e.getMessage());
-            filaRequisicoes.remove(clienteId);
-        } finally {
+        @Override
+        public void run() {
             try {
-                if (!cliente.isClosed()) {
-                    cliente.close();
+                out = new ObjectOutputStream(socket.getOutputStream());
+                in = new ObjectInputStream(socket.getInputStream());
+
+                while (!socket.isClosed()) {
+                    Mensagem msg = (Mensagem) in.readObject();
+                    System.out.println("[Servidor] Recebido de " + clientId + ": " + msg);
+
+                    switch (msg.getTipo()) {
+                        case "REQUISICAO":
+                            synchronized (filaRequisicoes) {
+                                filaRequisicoes.add(this);
+                                System.out.println("[Servidor] Fila atual: " + filaRequisicoes.size() + " clientes");
+
+                                if (filaRequisicoes.peek() == this) {
+                                    out.writeObject(new Mensagem("PERMISSAO", "Acesso concedido", msg.getRelogio()));
+                                    System.out.println("[Servidor] Permissão concedida para: " + clientId);
+                                } else {
+                                    out.writeObject(new Mensagem("AGUARDE", "Você está na posição " + filaRequisicoes.size(), msg.getRelogio()));
+                                }
+                            }
+                            break;
+
+                        case "LIBERACAO":
+                            synchronized (filaRequisicoes) {
+                                ClientHandler liberado = filaRequisicoes.poll();
+                                System.out.println("[Servidor] Cliente liberou recurso: " + clientId);
+
+                                if (!filaRequisicoes.isEmpty()) {
+                                    ClientHandler proximo = filaRequisicoes.peek();
+                                    proximo.out.writeObject(new Mensagem("PERMISSAO", "Acesso concedido", msg.getRelogio()));
+                                    System.out.println("[Servidor] Permissão concedida para próximo: " + proximo.clientId);
+                                }
+                            }
+                            break;
+
+                        case "HEARTBEAT":
+                            out.writeObject(new Mensagem("HEARTBEAT_ACK", "Recebido", msg.getRelogio()));
+                            break;
+                    }
                 }
-            } catch (IOException e) {
-                System.out.println("[Servidor] Erro ao fechar socket: " + e.getMessage());
+            } catch (EOFException e) {
+                System.out.println("[Servidor] Cliente desconectado: " + clientId);
+            } catch (Exception e) {
+                System.out.println("[Servidor] Erro com cliente " + clientId + ": " + e.getMessage());
+            } finally {
+                removerDaFila();
+                fecharConexao();
             }
-            clientesConectados.remove(clienteId);
         }
-    }
 
-    private static void salvarEstadoServidor() {
-        try (ObjectOutputStream out = new ObjectOutputStream(
-                new FileOutputStream("servidor_state.dat"))) {
-            out.writeObject(new ArrayList<>(filaRequisicoes));
-            System.out.println("[Servidor] Estado salvo. Fila: " + filaRequisicoes.size() + " clientes");
-        } catch (IOException e) {
-            System.out.println("[Servidor] Erro ao salvar estado: " + e.getMessage());
+        private void removerDaFila() {
+            synchronized (filaRequisicoes) {
+                filaRequisicoes.remove(this);
+            }
         }
-    }
 
-    private static void restaurarEstadoServidor() {
-        try (ObjectInputStream in = new ObjectInputStream(
-                new FileInputStream("servidor_state.dat"))) {
-            List<String> filaSalva = (List<String>) in.readObject();
-            filaRequisicoes = new LinkedList<>(filaSalva);
-            System.out.println("[Servidor] Estado restaurado com sucesso");
-        } catch (FileNotFoundException e) {
-            System.out.println("[Servidor] Nenhum estado anterior encontrado");
-        } catch (Exception e) {
-            System.out.println("[Servidor] Erro ao restaurar estado: " + e.getMessage());
+        private void fecharConexao() {
+            try {
+                if (in != null) in.close();
+                if (out != null) out.close();
+                if (socket != null && !socket.isClosed()) socket.close();
+            } catch (IOException e) {
+                System.out.println("[Servidor] Erro ao fechar conexão: " + e.getMessage());
+            }
         }
     }
 }
