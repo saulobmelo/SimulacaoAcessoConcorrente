@@ -2,6 +2,7 @@ package main;
 
 import servidor.ServidorCoordenador;
 import cliente.NoCliente;
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -18,7 +19,7 @@ public class Main {
         System.out.println("=== SISTEMA DISTRIBUÍDO - ACESSO CONCORRENTE ===");
         System.out.println("Disciplina: Sistemas Distribuídos");
         System.out.println("Objetivo: Simular acesso concorrente a recurso crítico");
-        System.out.println("Modo: Rotação automática de clientes a cada " + (TEMPO_ATIVO_POR_CLIENTE/1000) + " segundos\n");
+        System.out.println("Modo: Rotação automática de clientes a cada " + (TEMPO_ATIVO_POR_CLIENTE / 1000) + " segundos\n");
 
         if (args.length == 0) {
             executarSistemaComRotacao();
@@ -26,8 +27,6 @@ public class Main {
             executarApenasServidor();
         } else if (args[0].equals("cliente") && args.length >= 2) {
             executarApenasCliente(args[1]);
-        } else {
-            mostrarAjuda();
         }
     }
 
@@ -73,7 +72,7 @@ public class Main {
                     System.out.println("[MAIN] Iniciando " + nomeCliente + " (modo controlado)");
                     clientesAtivos[clientIndex].set(true);
 
-                    // Versão modificada do cliente que verifica se está ativo
+                    // Versão do cliente que verifica se está ativo
                     executarClienteControlado(nomeCliente, clientesAtivos[clientIndex]);
                 } catch (Exception e) {
                     System.err.println("[MAIN] Erro no " + nomeCliente + ": " + e.getMessage());
@@ -96,7 +95,7 @@ public class Main {
             while (executando.get()) {
                 try {
                     System.out.println("\n🔄 [CONTROLE] Ativando " + nomesClientes[clienteAtual] +
-                            " por " + (TEMPO_ATIVO_POR_CLIENTE/1000) + " segundos");
+                            " por " + (TEMPO_ATIVO_POR_CLIENTE / 1000) + " segundos");
 
                     // Ativar o cliente atual
                     clientesAtivos[clienteAtual].set(true);
@@ -127,7 +126,7 @@ public class Main {
         try {
             System.out.println("\n[MAIN] Sistema em execução com rotação. Pressione Ctrl+C para finalizar.");
             System.out.println("📋 Cronograma de rotação:");
-            System.out.println("   - Cada cliente ativo por " + (TEMPO_ATIVO_POR_CLIENTE/1000) + " segundos");
+            System.out.println("   - Cada cliente ativo por " + (TEMPO_ATIVO_POR_CLIENTE / 1000) + " segundos");
             System.out.println("   - Rotaão cíclica: Cliente1 → Cliente2 → Cliente3 → Cliente4 → Cliente1...");
 
             // Manter a thread principal ativa
@@ -176,7 +175,7 @@ public class Main {
                 }
 
                 // Pequena pausa entre requisições
-                Thread.sleep(2000 + (int)(Math.random() * 2000));
+                Thread.sleep(2000 + (int) (Math.random() * 2000));
             }
         } catch (Exception e) {
             System.out.println("[" + nomeCliente + "] Erro: " + e.getMessage());
@@ -189,7 +188,7 @@ public class Main {
         System.out.println("[" + nomeCliente + "] ⏰ Relógio=" + relogio);
 
         // Simular trabalho no recurso (mais curto para demonstração)
-        int tempoTrabalho = 1000 + (int)(Math.random() * 1000);
+        int tempoTrabalho = 1000 + (int) (Math.random() * 1000);
         System.out.println("[" + nomeCliente + "] ⏳ Trabalhando no recurso por " + tempoTrabalho + "ms");
         Thread.sleep(tempoTrabalho);
 
@@ -219,22 +218,5 @@ public class Main {
         } catch (Exception e) {
             System.err.println("Erro ao executar cliente: " + e.getMessage());
         }
-    }
-
-    private static void mostrarAjuda() {
-        System.out.println("📋 Uso do Sistema:");
-        System.out.println("  java Main                    - Executa servidor + 4 clientes com rotação");
-        System.out.println("  java Main servidor           - Executa apenas o servidor");
-        System.out.println("  java Main cliente <nome>     - Executa apenas um cliente (sem rotação)");
-        System.out.println();
-        System.out.println("⚙️  Modo com rotação:");
-        System.out.println("  - Cada cliente fica ativo por 15 segundos");
-        System.out.println("  - Rotaão automática entre todos os clientes");
-        System.out.println("  - Ideal para demonstração em aula");
-        System.out.println();
-        System.out.println("📚 Exemplos:");
-        System.out.println("  java Main                    // Modo demonstração com rotação");
-        System.out.println("  java Main servidor           // Apenas servidor");
-        System.out.println("  java Main cliente Cliente1   // Apenas Cliente1 (modo livre)");
     }
 }
